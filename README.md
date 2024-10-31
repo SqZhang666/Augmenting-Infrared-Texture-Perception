@@ -16,7 +16,6 @@
 
 **generate_demo**：生成视频。
 
-
 ### **RIFT-multimodal-image-matching-main**
 
 - 利用红外图像和二值化后的事件 RGB 图像进行特征匹配。

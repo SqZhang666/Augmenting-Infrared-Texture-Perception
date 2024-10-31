@@ -5,7 +5,7 @@
 # @Description : V0.1
 # 采用实际采集的数据集进行测试训练
 # 相较于之前的New4_step系列训练文件，修正了数据集的加载方式，另外对于loss进行了新的约束
-#TODO 1.对于loss那里我已经得到了mask，target是否有存在的必要
+# TODO 1.对于loss那里我已经得到了mask，target是否有存在的必要
 #     2.纹理部分是否可以直接给出，就是其实不需要融合后的图片，毕竟求解loss的时候也是分开求解的
 import os
 import cv2
@@ -20,27 +20,26 @@ from torch.utils.data import DataLoader, Dataset
 from soberloss import GradLoss
 
 
-
 class CombinedLoss(nn.Module):
     def __init__(self, alpha=1.0, beta=1.0):
         super(CombinedLoss, self).__init__()
-        self.texture_loss = nn.MSELoss() # 纹理部分约束
-        self.subject_loss = nn.MSELoss()     # 排除纹理的其他约束
+        self.texture_loss = nn.MSELoss()  # 纹理部分约束
+        self.subject_loss = nn.MSELoss()  # 排除纹理的其他约束
         self.alpha = alpha  # 纹理部分权重alpha
         self.beta = beta  # 除纹理的其他部分权重beta
 
-    def forward(self,output, target, mask):
+    def forward(self, output, target, mask):
         # 计算每个损失
         binary_mask = (mask >= 1).to(torch.int)
-        #loss1 = self.texture_loss(output * binary_mask, target*binary_mask) # 只关注纹理部分
-        #loss2 = self.subject_loss(output * (1-binary_mask), target*(1-binary_mask)) # 纹理之外的主体部分
+        loss1 = self.texture_loss(output * binary_mask, target * binary_mask)  # 只关注纹理部分
+        loss2 = self.subject_loss(output * (1 - binary_mask), target * (1 - binary_mask))  # 纹理之外的主体部分
         # 返回加权总损失
-        loss = self.texture_loss(output, target)
-        return loss
+        loss = self.alpha * loss1 + self.beta * loss2
+        return self.texture_loss(output, target)
 
 
 # 定义可视化函数
-def visualize(epoch,index, output, num_blocks_h, num_blocks_w, block_height, block_width):
+def visualize(epoch, index, output, num_blocks_h, num_blocks_w, block_height, block_width):
     output = (output * 255).astype(np.uint8)  # 还原到 [0, 255] 范围并转换为 uint8
     image = np.zeros((num_blocks_h * block_height, num_blocks_w * block_width), dtype=np.uint8)
     for i in range(num_blocks_h):
@@ -129,6 +128,7 @@ def load_and_edge_detect_nir(nir_image_path):
 
     return edges_padded
 
+
 class CustomDataset(Dataset):
     def __init__(self, root_dir):
         self.root_dir = root_dir
@@ -145,7 +145,7 @@ class CustomDataset(Dataset):
 
             # 定义每种文件的路径
             ir_path = os.path.join(group_folder_path, 'ir')
-            complemented_event_path = os.path.join(group_folder_path, 'complemented_event')
+            new_event_path = os.path.join(group_folder_path, 'new_event')
             grayscale_path = os.path.join(group_folder_path, 'grayscale')
             target_path = os.path.join(group_folder_path, 'target_fusion')
             mask_path = os.path.join(group_folder_path, 'mask')
@@ -153,35 +153,37 @@ class CustomDataset(Dataset):
             # 获取每种文件夹的文件列表，并确保它们的数量一致
             grayscale_files = sorted(os.listdir(grayscale_path))
             ir_files = sorted(os.listdir(ir_path))
-            complemented_event_files = sorted(os.listdir(complemented_event_path))
+            new_event_files = sorted(os.listdir(new_event_path))
             target_files = sorted(os.listdir(target_path))
             mask_files = sorted(os.listdir(mask_path))
 
             # 确保所有文件夹中的文件数量一致
             num_files = len(grayscale_files)
-            if not (num_files == len(ir_files) == len(complemented_event_files) == len(target_files) == len(mask_files)):
+            if not (num_files == len(ir_files) == len(new_event_files) == len(target_files) == len(mask_files)):
+                print(num_files, len(ir_files), len(new_event_files), len(target_files), len(mask_files))
                 raise ValueError(f"文件数量不一致: {group_folder}")
 
             # 使用 zip 将所有文件路径一一对应
-            for ir, complemented_event, target_fusion, mask in zip(
-                ir_files, complemented_event_files, target_files, mask_files
+            for ir, new_event, target_fusion, mask in zip(
+                    ir_files, new_event_files, target_files, mask_files
             ):
                 self.samples.append({
                     'ir': os.path.join(ir_path, ir),
-                    'complemented_event': os.path.join(complemented_event_path, complemented_event),
+                    'new_event': os.path.join(new_event_path, new_event),
                     'target_fusion': os.path.join(target_path, target_fusion),
                     'mask': os.path.join(mask_path, mask)
                 })
 
-            #'grayscale': cv2.imread(sample_path['grayscale'], cv2.IMREAD_GRAYSCALE),
+            # 'grayscale': cv2.imread(sample_path['grayscale'], cv2.IMREAD_GRAYSCALE),
+
     def __getitem__(self, index):
         sample_path = self.samples[index]
-        #print(sample_path)
+        # print(sample_path)
         train_data = {
             'ir': cv2.imread(sample_path['ir'], cv2.IMREAD_GRAYSCALE),
-            'complemented_event': cv2.imread(sample_path['complemented_event'], cv2.IMREAD_GRAYSCALE),
+            'new_event': cv2.imread(sample_path['new_event'], cv2.IMREAD_GRAYSCALE),
             'target_fusion': cv2.imread(sample_path['target_fusion'], cv2.IMREAD_GRAYSCALE),
-            'mask': cv2.imread(sample_path['mask'],cv2.IMREAD_GRAYSCALE)
+            'mask': cv2.imread(sample_path['mask'], cv2.IMREAD_GRAYSCALE)
         }
         return train_data
 
@@ -194,11 +196,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)
 model = model_test(in_channels=1).to(device)
 loss_fn = CombinedLoss()
-loss_grad = GradLoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 loss_filename = 'results/loss_values.txt'
-
-
 
 if __name__ == '__main__':
 
@@ -207,7 +206,7 @@ if __name__ == '__main__':
 
     # 训练循环
     model.train()
-    num_epochs = 200
+    num_epochs = 1000
     batch_size = 1
 
     # 定义数据路径
@@ -218,25 +217,26 @@ if __name__ == '__main__':
     for epoch in tqdm(range(num_epochs), desc='Processing', ncols=80, position=0, leave=True):
         epoch_loss = 0.0
         for i, data in enumerate(train_loader):
+            new_event = cv2.resize(data['new_event'][0, :, :].numpy(), (346, 260))
+            ir = cv2.resize(data['ir'][0, :, :].numpy(), (346, 260))
+            target = cv2.resize(data['target_fusion'][0, :, :].numpy(), (346, 260))
+            mask = cv2.resize(data['mask'][0, :, :].numpy(), (346, 260))
 
-            event = data['complemented_event'][0,:,:].numpy()
-            ir = cv2.resize(data['ir'][0,:,:].numpy(), (346, 260))
-            target = cv2.resize(data['target_fusion'][0,:,:].numpy(), (346, 260))
-            mask = cv2.resize(data['mask'][0,:,:].numpy(), (346, 260))
+            # binary_mask = (mask >= 255).astype(int)
 
             train_ir = torch.from_numpy(np.expand_dims(np.expand_dims(ir, axis=0), axis=0) / 255.0).float()
-            train_event = torch.from_numpy(np.expand_dims(np.expand_dims(event, axis=0), axis=0) / 255.0).float()
+            train_event = torch.from_numpy(np.expand_dims(np.expand_dims(new_event, axis=0), axis=0) / 255.0).float()
+            # train_event = torch.from_numpy(np.expand_dims(np.expand_dims(target*binary_mask, axis=0), axis=0) / 255.0).float()
             train_target = torch.from_numpy(np.expand_dims(np.expand_dims(target, axis=0), axis=0) / 255.0).float()
             train_mask = torch.from_numpy(np.expand_dims(np.expand_dims(mask, axis=0), axis=0) / 255.0).float()
-            train_ir, train_event, train_target, train_mask = train_ir.to(device), train_event.to(device), train_target.to(device),train_mask.to(device)
+            train_ir, train_event, train_target, train_mask = train_ir.to(device), train_event.to(
+                device), train_target.to(device), train_mask.to(device)
 
             optimizer.zero_grad()
-            output = model(train_ir,train_event)
+            output = model(train_ir, train_event)
 
-
-
-            #loss = loss_fn(output, train_target,train_mask)
-            loss = loss_fn(output, train_target,train_mask) + 0.5*loss_grad(output,train_target)
+            # loss = loss_fn(output, train_target,train_mask)
+            loss = loss_fn(output, train_target, train_mask)
             loss.backward()
 
             optimizer.step()
@@ -244,14 +244,14 @@ if __name__ == '__main__':
             epoch_loss += loss.item()
 
             if epoch % 25 == 0 and i % 5 == 0:
-                print(f'正在进行第{epoch+1}轮次，第{i}组数据的测试推理')
+                print(f'正在进行第{epoch + 1}轮次，第{i}组数据的测试推理')
                 with torch.no_grad():
-                    pre_output = model(train_ir,train_event)
+                    pre_output = model(train_ir, train_event)
 
-                    target_img = (train_target.detach().cpu().numpy()[0,0,:,:] * 255).astype(np.uint8)
-                    output_image = (pre_output.detach().cpu().numpy()[0,0,:,:] * 255).astype(np.uint8)
+                    target_img = (train_target.detach().cpu().numpy()[0, 0, :, :] * 255).astype(np.uint8)
+                    output_image = (pre_output.detach().cpu().numpy()[0, 0, :, :] * 255).astype(np.uint8)
 
-                    plt.figure(figsize=(10,5))
+                    plt.figure(figsize=(10, 5))
                     plt.subplot(1, 2, 1)
                     plt.imshow(target_img, cmap='gray')
                     plt.title('target_img')
@@ -265,8 +265,7 @@ if __name__ == '__main__':
                     plt.savefig(save_path)
                     plt.close()
 
-
-        epoch_loss /= i+1
+        epoch_loss /= i + 1
         save_loss_to_txt(epoch_loss, loss_filename)
         # 合并所有输出并处理重叠区域
         print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {epoch_loss:.6f}')
