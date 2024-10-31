@@ -309,10 +309,11 @@ class model_test(nn.Module):
 
     def forward(self, ir, event):
         out0, i0, i1, i2, i3 = self.feature0(ir)
-        out1, e0, e1, e2, e3 = self.feature0(event)
+        out1, e0, e1, e2, e3 = self.feature1(event)
 
         f3 = self.con_conv_up_3(i3 + e3)
         f2 = self.con_conv_up_2(torch.cat([f3[:,:,:,:84], i2 + e2], dim=1))
         f1 = self.con_conv_up_1(torch.cat([f2[:,:,:128,:], i1 + e1], dim=1))
         output = self.con_conv_up_0(torch.cat([f1[:,:,:258,:344], i0 + e0], dim=1))
+        output = torch.sigmoid(output)
         return output
