@@ -5,8 +5,7 @@
 # @Description : V0.1
 # 采用实际采集的数据集进行测试训练
 # 相较于之前的New4_step系列训练文件，修正了数据集的加载方式，另外对于loss进行了新的约束
-# TODO 1.对于loss那里我已经得到了mask，target是否有存在的必要
-#     2.纹理部分是否可以直接给出，就是其实不需要融合后的图片，毕竟求解loss的时候也是分开求解的
+
 import os
 import cv2
 import torch

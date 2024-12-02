@@ -1,15 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 # @Time    : 2024/10/11 21:28
-# @File    : All_model4.py
+# @File    : IE_Unet.py
 # @Description :
-# 去除前置的事件3D补全网络；
-# 事件数据取反得到黑色的
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# @Time    : 2024/9/26 09:10
-# @File    : All_model5.py
-# @Description : 修改了模块的激活函数为Sigmoid
 
 
 
